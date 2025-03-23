@@ -1,26 +1,49 @@
 import cv2
 import numpy as np
 import tensorflow as tf
-import time
+import requests
 import threading
-import geo
+import time
 import firebase_admin
-from firebase_admin import credentials
+from firebase_admin import credentials, db
 
-# Load the TFLite model (only once)
+
+cred = credentials.Certificate("cred.json")  
+firebase_admin.initialize_app(cred, {
+    "databaseURL": "https://potholedetection-4f930-default-rtdb.firebaseio.com/"  # Replace with your database URL
+})
+ref = db.reference("location") 
+
+locations = []
+previous_data = None
+
 interpreter = tf.lite.Interpreter(model_path="best_float16.tflite")
 interpreter.allocate_tensors()
-
-# Retrieve input/output tensor details (only once)
 input_details = interpreter.get_input_details()
 output_details = interpreter.get_output_details()
 input_shape = input_details[0]['shape']
-input_size = (input_shape[1], input_shape[2])  # (height, width)
-print(input_details)
+input_size = (input_shape[1], input_shape[2])
 
-# Global flag to trigger background task (avoid multiple threads for each detection)
 triggered = False
 trigger_lock = threading.Lock()
+
+def get_gps_data(): 
+    global previous_data 
+    gps_data = ref.get()
+
+    if gps_data:
+        latitude = gps_data.get("latitude", 0.0)
+        longitude = gps_data.get("longitude", 0.0)
+
+        if previous_data !=  {"lat": latitude, "lon": longitude}:  
+            locations.append( {"lat": latitude, "lon": longitude} )
+            previous_data = {"lat": latitude, "lon": longitude}
+            print(f"New location added: {latitude}, {longitude}")
+        else:
+            print("Duplicate GPS data, not appending.")
+    else:
+        print("No GPS data found.")
+   
 
 def preprocess_frame(frame):
     """Preprocess frame: resize, normalize, and ensure correct shape"""
@@ -29,22 +52,31 @@ def preprocess_frame(frame):
     img_resized = np.expand_dims(img_resized, axis=0)
     return img_resized
 
-def triggred():
+def triggeredfun():
     """Background task for pothole detection"""
-    print("Pothole")
+    get_gps_data()
+    reset_trigger()
 
 def trigger_in_background():
     """Trigger background task only once to avoid multiple triggers"""
     global triggered
-    if not triggered:
-        triggered = True
-        threading.Thread(target=triggred).start()
+    with trigger_lock:
+        if not triggered:
+            triggered = True
+            threading.Thread(target=triggeredfun, daemon=True).start()
+
 
 def reset_trigger():
-    """Reset trigger flag after 1 second delay to allow new triggers"""
-    global triggered
-    time.sleep(1)
-    triggered = False
+    """Reset trigger flag after 0.5 seconds without blocking main thread"""
+    def reset():
+        time.sleep(0.5)
+        global triggered
+        with trigger_lock:
+            triggered = False
+
+    threading.Thread(target=reset, daemon=True).start()
+
+
 
 def detect_objects(frame, confidence_threshold=0.75):
     """Run inference and return detections"""
@@ -53,38 +85,29 @@ def detect_objects(frame, confidence_threshold=0.75):
     
     interpreter.set_tensor(input_details[0]['index'], image_data)
     interpreter.invoke()
-    
+
     output_data = interpreter.get_tensor(output_details[0]['index'])
     num_detections = output_data.shape[-1]
-    boxes = output_data[0, :4, :].T  # Transposed boxes (x_center, y_center, width, height)
+    boxes = output_data[0, :4, :].T
     scores = output_data[0, 4, :]
-    classes = output_data[0, 5, :]
+    classes = output_data[0, 5, :]  # Get class indices
+
 
     for i in range(num_detections):
         if scores[i] > confidence_threshold:
-            # Trigger background task
             trigger_in_background()
-            
-            # Draw bounding box on detected object (pothole)
             x_center, y_center, width, height = boxes[i]
             x_min = int((x_center - width / 2) * w)
             y_min = int((y_center - height / 2) * h)
             x_max = int((x_center + width / 2) * w)
             y_max = int((y_center + height / 2) * h)
-
             cv2.rectangle(frame, (x_min, y_min), (x_max, y_max), (0, 255, 0), 2)
             label = f"Pothole {int(classes[i])}: {(scores[i] * 100):.2f}"
             cv2.putText(frame, label, (x_min, max(y_min - 10, 20)), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
 
     return frame
 
-def add_to_firebase():
-    geo_location = geo.get_current_location()
-    if geo_location:
-        lat, lon = geo_location
-        cred = credentials.Certificate("firebase-adminsdk.json")
-        firebase_admin.initialize_app(cred)
-        
+  
 
 def process_frame():
     """Main frame processing loop"""
@@ -98,22 +121,10 @@ def process_frame():
         ret, frame = cap.read()  # 1ms
         if not ret:
             break
-
-        # Detect objects in the frame
         frame = detect_objects(frame)
-        
-        # Display processed frame
         cv2.imshow("Real-time Detection", frame)
-
-        # Break loop on 'q' key press
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
     cap.release()
     cv2.destroyAllWindows()
-
-# Start the background thread to reset trigger state
-threading.Thread(target=reset_trigger, daemon=True).start()
-
-# Start processing frames
-process_frame()

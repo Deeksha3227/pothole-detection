@@ -3,38 +3,56 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>OpenStreetMap Locations</title>
+    <title>Pothole Detection - OpenStreetMap</title>
+
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
     <style>
         #map {
-            height: 80vh;
+            height: 90vh;
             width: 100%;
         }
     </style>
 </head>
 <body>
-    <h1>Realtime Pothole detection</h1>
+
+    <h2>Pothole Detection Map (OpenStreetMap)</h2>
     <div id="map"></div>
 
-    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
     <script>
-        // Initialize the map
-        var map = L.map('map').setView([51.5074, -0.1278], 2);  // Default to London
+        var map = L.map('map').setView([20.5937, 78.9629], 5);
 
-        // Set the OpenStreetMap tile layer
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            attribution: '&copy; OpenStreetMap contributors'
         }).addTo(map);
 
-        // Fetch the locations from the Flask server
-        fetch('/locations')
-            .then(response => response.json())
-            .then(locations => {
-                locations.forEach(location => {
-                    var marker = L.marker([location.lat, location.lon]).addTo(map);
-                    marker.bindPopup(location.name);
-                });
-            });
+        var markers = {};
+
+        function updatePotholeLocations() {
+            fetch("/locations")
+                .then(response => response.json())
+                .then(data => {
+                    console.log("Pothole Locations:", data);
+                    data.forEach(pothole => {
+                        if (pothole.lat !== undefined && pothole.lon !== undefined) {
+                            var key = `${pothole.lat},${pothole.lon}`;
+                            if (!markers[key]) {
+                                var marker = L.marker([pothole.lat, pothole.lon]).addTo(map);
+                                marker.bindPopup(`<strong>Pothole Detected</strong><br>Lat: ${pothole.lat}, Lng: ${pothole.lon}`);
+                                markers[key] = marker;
+                            }
+                        } else {
+                            console.error("Invalid location data:", pothole);
+                        }
+                    });
+                })
+                .catch(error => console.error("Error fetching locations:", error));
+        }
+
+        updatePotholeLocations();
+        setInterval(updatePotholeLocations, 2000);
     </script>
+
 </body>
 </html>
