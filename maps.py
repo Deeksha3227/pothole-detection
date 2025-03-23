@@ -10,9 +10,9 @@ detection_lock = threading.Lock()
 def start_detection():
     """Runs the detection process in a separate thread to avoid blocking Flask"""
     global detection_running
-    main.process_frame()  # Ensure this function has an exit condition
+    main.process_frame()
     with detection_lock:
-        detection_running = False  # Allow next detection
+        detection_running = False
 
 @app.route('/detect')
 def startdetect():
