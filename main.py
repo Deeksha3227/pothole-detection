@@ -12,9 +12,10 @@ cred = credentials.Certificate("cred.json")
 firebase_admin.initialize_app(cred, {
     "databaseURL": "https://potholedetection-4f930-default-rtdb.firebaseio.com/"  # Replace with your database URL
 })
-ref = db.reference("location") 
+ref = db.reference("location")
 
 locations = []
+
 previous_data = None
 
 interpreter = tf.lite.Interpreter(model_path="best_float16.tflite")
@@ -25,6 +26,7 @@ input_shape = input_details[0]['shape']
 input_size = (input_shape[1], input_shape[2])
 
 triggered = False
+
 trigger_lock = threading.Lock()
 
 def get_gps_data(): 
@@ -90,7 +92,7 @@ def detect_objects(frame, confidence_threshold=0.75):
     num_detections = output_data.shape[-1]
     boxes = output_data[0, :4, :].T
     scores = output_data[0, 4, :]
-    classes = output_data[0, 5, :]  # Get class indices
+    classes = output_data[0, 5, :]  
 
 
     for i in range(num_detections):
@@ -118,7 +120,7 @@ def process_frame():
         exit()
 
     while cap.isOpened():
-        ret, frame = cap.read()  # 1ms
+        ret, frame = cap.read()  
         if not ret:
             break
         frame = detect_objects(frame)

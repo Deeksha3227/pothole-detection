@@ -1,6 +1,6 @@
 from flask import Flask, render_template, jsonify, request
 import threading
-import main 
+import main
 
 app = Flask(__name__)
 
@@ -30,9 +30,8 @@ def index():
 
 @app.route('/locations', methods=['GET'])
 def get_locations():
-    """Return stored pothole locations"""
     return jsonify(main.locations)
 
 
 if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(port=5000, debug=True)
