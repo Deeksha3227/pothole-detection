@@ -10,7 +10,7 @@ from firebase_admin import credentials, db
 
 cred = credentials.Certificate("cred.json")  
 firebase_admin.initialize_app(cred, {
-    "databaseURL": "https://potholedetection-4f930-default-rtdb.firebaseio.com/"  # Replace with your database URL
+    "databaseURL": "https://potholedetection-4f930-default-rtdb.firebaseio.com/"
 })
 ref = db.reference("location")
 
