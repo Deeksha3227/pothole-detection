@@ -130,3 +130,15 @@ def process_frame():
 
     cap.release()
     cv2.destroyAllWindows()
+
+
+    if __name__ == "__main__":
+        process_frame()
+        img = cv2.imread("test.jpg")   # replace with your image filename
+    if img is None:
+        print("Error: Could not read image.")
+    else:
+        output = detect_objects(img)
+        cv2.imshow("Detection Result", output)
+        cv2.waitKey(0)   # wait until any key is pressed
+        cv2.destroyAllWindows()
